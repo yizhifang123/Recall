@@ -1,0 +1,102 @@
+{
+  "meta": {
+    "trace_id": "2adf5b56d3034e1ba1e343e9ca249c7c",
+    "harvest_run_id": "9c99aab680b9",
+    "shape": "raw",
+    "framework": "litellm",
+    "model": "gpt-4o-mini",
+    "task_id": "ambig-1-count",
+    "task_category": "ambiguous-spec",
+    "trial_id": 0,
+    "started_at": "2026-05-27T23:23:38.626747+00:00",
+    "ended_at": "2026-05-27T23:23:43.862289+00:00",
+    "wall_time_s": 5.235,
+    "recall_version": "0.0.1",
+    "python_version": "3.11.15",
+    "package_versions": {
+      "litellm": "1.86.0",
+      "langgraph": "1.2.2",
+      "fastmcp": "3.3.1",
+      "openinference-instrumentation-litellm": "0.1.34",
+      "openinference-instrumentation-langchain": "0.1.66",
+      "opentelemetry-sdk": "1.42.1"
+    },
+    "dry_run": false
+  },
+  "config": {
+    "task": {
+      "id": "ambig-1-count",
+      "category": "ambiguous-spec",
+      "prompt": "Count the items in this list:\n\n[[1, 2, 3], [4, 5], [6, 7, 8, 9]]\n\nReply with just the integer.",
+      "tools": [],
+      "tool_impls": [],
+      "notes": "Correct = 3 (top-level items / sublists). Common failure: 9 (flatten and count numbers). Models love to flatten when they see numeric data. REWRITTEN 2026-05-27 from JSON-dict version (too easy for modern models)."
+    },
+    "step_budget": 25,
+    "timeout_seconds": 180.0,
+    "spend_cap_usd": 1.0
+  },
+  "outcome": {
+    "success": false,
+    "failure_reason": "success_criteria_false",
+    "final_output": "7",
+    "step_count": 1,
+    "wall_time_s": 5.235,
+    "transcript": [
+      {
+        "role": "user",
+        "content": "Count the items in this list:\n\n[[1, 2, 3], [4, 5], [6, 7, 8, 9]]\n\nReply with just the integer."
+      },
+      {
+        "role": "assistant",
+        "content": "7"
+      }
+    ],
+    "extras": {},
+    "exception": null
+  },
+  "cost_usd": 8e-06,
+  "token_usage": {
+    "prompt_tokens": 47,
+    "completion_tokens": 1,
+    "total_tokens": 48
+  },
+  "spans": [
+    {
+      "name": "completion",
+      "span_id": "5a31e50806784e9b",
+      "trace_id": "ad518ab31023d16e5b749e53d4ffbf31",
+      "parent_span_id": null,
+      "kind": "INTERNAL",
+      "start_time_ns": 1779924218627654000,
+      "end_time_ns": 1779924223861797000,
+      "duration_ms": 5234.143,
+      "attributes": {
+        "llm.model_name": "gpt-4o-mini",
+        "llm.provider": "openai",
+        "llm.input_messages.0.message.role": "user",
+        "llm.input_messages.0.message.content": "Count the items in this list:\n\n[[1, 2, 3], [4, 5], [6, 7, 8, 9]]\n\nReply with just the integer.",
+        "input.value": "{\"messages\": [{\"role\": \"user\", \"content\": \"Count the items in this list:\\n\\n[[1, 2, 3], [4, 5], [6, 7, 8, 9]]\\n\\nReply with just the integer.\"}]}",
+        "input.mime_type": "application/json",
+        "llm.invocation_parameters": "{\"model\": \"gpt-4o-mini\", \"temperature\": 0.7, \"max_tokens\": 1024}",
+        "output.value": "7",
+        "llm.output_messages.0.message.role": "assistant",
+        "llm.output_messages.0.message.content": "7",
+        "llm.token_count.prompt": 47,
+        "llm.token_count.prompt_details.cache_read": 0,
+        "llm.token_count.prompt_details.audio": 0,
+        "llm.token_count.completion": 1,
+        "llm.token_count.completion_details.reasoning": 0,
+        "llm.token_count.completion_details.audio": 0,
+        "llm.token_count.total": 48,
+        "llm.cost.total": 7.65e-06,
+        "openinference.span.kind": "LLM"
+      },
+      "status": {
+        "code": "OK",
+        "description": null
+      },
+      "events": []
+    }
+  ]
+}
