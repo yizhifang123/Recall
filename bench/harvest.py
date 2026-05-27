@@ -39,7 +39,7 @@ from bench.tasks import Task, get_task
 
 REPO_ROOT = Path("/Users/yida/Recall")
 SEED_DIR = REPO_ROOT / "bench" / "seed_traces"
-ENV_PATH = REPO_ROOT / ".env"
+ENV_PATHS = [REPO_ROOT / ".env", REPO_ROOT / ".env.local"]
 
 console = Console()
 app = typer.Typer(
@@ -323,12 +323,18 @@ def main(
     ),
 ) -> None:
     # 1. Load .env so OPENAI_API_KEY / ANTHROPIC_API_KEY land in os.environ.
-    if ENV_PATH.exists():
-        load_dotenv(ENV_PATH, override=False)
-        console.print(f"[dim]Loaded env from {ENV_PATH}[/dim]")
+    loaded = []
+    # .env.local overrides .env (Next.js convention).
+    for env_path in ENV_PATHS:
+        if env_path.exists():
+            load_dotenv(env_path, override=True)
+            loaded.append(env_path.name)
+    if loaded:
+        console.print(f"[dim]Loaded env from {', '.join(loaded)}[/dim]")
     else:
         console.print(
-            f"[yellow]No .env at {ENV_PATH} (copy .env.example and fill in keys).[/yellow]"
+            f"[yellow]No .env or .env.local at {REPO_ROOT} "
+            "(copy .env.example and fill in keys).[/yellow]"
         )
 
     # 2. Load config.
