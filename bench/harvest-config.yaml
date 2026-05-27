@@ -1,0 +1,45 @@
+# Recall harvest matrix — Phase 1.
+# Targets (per the Phase 1 spec): 8 raw, 10 single-agent, 7 multi-agent, 5 cli.
+# Each row defines a (shape, model, task) cell; n_trials controls retries.
+
+defaults:
+  step_budget: 25
+  timeout_seconds: 180
+  n_trials: 2
+  spend_cap_usd: 5.0
+
+trials:
+  # ============================================================
+  # RAW shape — target 8 failures
+  # ============================================================
+  - { shape: raw, model: gpt-4o-mini,                 task: ambig-1-count, n_trials: 3 }
+  - { shape: raw, model: claude-haiku-4-5-20251001,   task: ambig-1-count, n_trials: 2 }
+  - { shape: raw, model: gpt-5-mini,                  task: ambig-1-count, n_trials: 2 }
+  - { shape: raw, model: gpt-4o-mini,                 task: ambig-2-sort,  n_trials: 3 }
+  - { shape: raw, model: claude-haiku-4-5-20251001,   task: ambig-2-sort,  n_trials: 2 }
+
+  # ============================================================
+  # SINGLE-AGENT shape — target 10 failures
+  # ============================================================
+  - { shape: single-agent, model: gpt-4o-mini,               task: multi-1-coat, n_trials: 3 }
+  - { shape: single-agent, model: claude-haiku-4-5-20251001, task: multi-1-coat, n_trials: 2 }
+  - { shape: single-agent, model: gpt-5-mini,                task: multi-1-coat, n_trials: 2 }
+  - { shape: single-agent, model: gpt-4o-mini,               task: multi-2-fx,   n_trials: 3 }
+  - { shape: single-agent, model: claude-haiku-4-5-20251001, task: multi-2-fx,   n_trials: 2 }
+  - { shape: single-agent, model: gpt-5-mini,                task: multi-2-fx,   n_trials: 2 }
+
+  # ============================================================
+  # MULTI-AGENT shape (LangGraph per D-001-A) — target 7 failures
+  # ============================================================
+  - { shape: multi-agent, model: gpt-4o-mini,               task: long-1-trip,   n_trials: 2 }
+  - { shape: multi-agent, model: claude-haiku-4-5-20251001, task: long-1-trip,   n_trials: 2 }
+  - { shape: multi-agent, model: gpt-5-mini,                task: long-1-trip,   n_trials: 2 }
+  - { shape: multi-agent, model: gpt-4o-mini,               task: partial-1-db,  n_trials: 2 }
+  - { shape: multi-agent, model: claude-haiku-4-5-20251001, task: partial-1-db,  n_trials: 2 }
+
+  # ============================================================
+  # CLI shape (Claude Code headless) — target 5 failures
+  # CC trials run in an isolated /tmp workdir per trial.
+  # ============================================================
+  - { shape: cli, model: claude-haiku-4-5-20251001, task: cli-1-metrics,  n_trials: 3 }
+  - { shape: cli, model: claude-haiku-4-5-20251001, task: cli-2-test-fix, n_trials: 3 }

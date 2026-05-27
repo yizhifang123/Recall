@@ -59,3 +59,47 @@ Twitter handle availability not reliably verifiable from automation; deferred.
 - Future docs and the README must consistently surface `recall-trace` as
   the installable name; never let the bare `recall` PyPI name leak into
   install instructions.
+
+---
+
+## D-001-A — Multi-agent trace harvesting uses LangGraph
+
+- **Date:** 2026-05-25
+- **Status:** Accepted
+
+### Context
+
+Phase 1 trace harvesting needs a multi-agent representative shape (~7 of the
+30 target seed traces). The candidate frameworks are AutoGen 0.4 (popular,
+well-documented role-drift and repeated-work failures), CrewAI (role-based
+hierarchical agents, known for over-delegation), and LangGraph (`StateGraph`
++ cycles + checkpointers, known for state corruption and conditional-edge
+mispicks).
+
+### Decision
+
+Use **LangGraph** for the multi-agent shape in v1. Concretely: a
+planner-executor-verifier graph built with `StateGraph`, at least three
+nodes, conditional edges between them, and a checkpointer (`MemorySaver`
+is sufficient for harvesting).
+
+### Rationale
+
+- Aligns Phase 1 trace harvesting with the primary multi-agent framework
+  integration planned for Phase 2.4, so the failure modes we collect now
+  match the framework we'll instrument deeply later.
+- Avoids scope creep — supporting multiple multi-agent frameworks in v1
+  doubles the executor surface and the trace-normalization work for
+  marginal coverage gain.
+
+### Consequences
+
+- AutoGen and CrewAI multi-agent harvesting are out of scope for v1 and
+  tracked on `ROADMAP.md`.
+- LangGraph traces use `openinference-instrumentation-langchain` for OTel
+  capture (LangGraph builds on LangChain primitives).
+- Multi-agent trace coverage reflects LangGraph's failure modes
+  specifically. Failures induced by AutoGen's role-based chat ceremony or
+  CrewAI's hierarchical delegation pattern are NOT represented in v1 seed
+  traces; the taxonomy derived from this corpus must explicitly note that
+  limitation.

@@ -3,3 +3,7 @@ target-version = "py311"
 
 [lint]
 select = ["E", "F", "I", "UP", "B"]
+
+[lint.per-file-ignores]
+# Typer's recommended pattern uses typer.Option() in function defaults.
+"bench/harvest.py" = ["B008"]
