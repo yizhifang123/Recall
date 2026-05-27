@@ -34,6 +34,51 @@ _REPO_SNAPSHOT_FILES = [
     "README.md",
 ]
 
+# CC tools the harvested agent is allowed to use. We intentionally scope to
+# read + workdir-local edits + a narrow Bash allowlist for pytest. Without
+# this, --permission-mode=bypassPermissions would give a confused/adversarial
+# agent unrestricted Bash, which is dangerous even though the cwd is a
+# disposable temp dir (Bash can still read $HOME, hit the network, etc.).
+_ALLOWED_TOOLS = [
+    "Read",
+    "Write",
+    "Edit",
+    "Grep",
+    "Glob",
+    "LS",
+    "Bash(uv run pytest:*)",
+    "Bash(pytest:*)",
+]
+
+# Env vars the child CC subprocess is allowed to inherit. We do NOT pass
+# OPENAI_API_KEY, AWS_*, or any other parent secrets — only what CC itself
+# needs to function (PATH for binaries, HOME for config, ANTHROPIC_API_KEY
+# for model auth, plus a few locale/term vars for clean text output).
+_SAFE_ENV_PASSTHROUGH = (
+    "PATH",
+    "HOME",
+    "USER",
+    "TERM",
+    "LANG",
+    "LC_ALL",
+    "TMPDIR",
+    "SHELL",
+)
+
+
+def _build_child_env() -> dict[str, str]:
+    """Return an explicit env dict for the CC subprocess.
+
+    Pass only safe locale/path vars + ANTHROPIC_API_KEY. Never inherit the
+    full parent env (no OPENAI_API_KEY, AWS creds, etc. — CC has no business
+    seeing them and a misled agent could exfiltrate).
+    """
+    env = {k: os.environ[k] for k in _SAFE_ENV_PASSTHROUGH if k in os.environ}
+    env["CLAUDE_CODE_DISABLE_AUTOUPDATER"] = "1"
+    if "ANTHROPIC_API_KEY" in os.environ:
+        env["ANTHROPIC_API_KEY"] = os.environ["ANTHROPIC_API_KEY"]
+    return env
+
 
 class ClaudeCliExecutor(ShapeExecutor):
     name = "cli"
@@ -79,11 +124,12 @@ class ClaudeCliExecutor(ShapeExecutor):
                 "--verbose",
                 "--model",
                 spec.model,
-                "--permission-mode",
-                "bypassPermissions",
+                "--allowedTools",
+                ",".join(_ALLOWED_TOOLS),
             ]
             outcome.extras["claude_cli_cmd"] = cmd
             outcome.extras["claude_cli_workdir"] = str(workdir)
+            outcome.extras["claude_cli_allowed_tools"] = list(_ALLOWED_TOOLS)
 
             events: list[dict] = []
             try:
@@ -93,7 +139,7 @@ class ClaudeCliExecutor(ShapeExecutor):
                     stderr=subprocess.PIPE,
                     cwd=str(workdir),
                     text=True,
-                    env={**os.environ, "CLAUDE_CODE_DISABLE_AUTOUPDATER": "1"},
+                    env=_build_child_env(),
                 )
             except FileNotFoundError as exc:
                 outcome.exception = ExecutionException.from_exc(exc)
