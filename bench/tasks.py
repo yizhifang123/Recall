@@ -90,22 +90,26 @@ def _get_weather(city: str, when: str = "today") -> dict:
 # =============================================================================
 
 
-def _check_count_is_5(o: ExecutionOutcome) -> bool:
-    # Strip noise; look for a standalone 5 (not 14, not 25, not 5%).
+def _check_count_is_3(o: ExecutionOutcome) -> bool:
+    # Correct: 3 (top-level items). Common wrong: 9 (flattened number count).
     out = (o.final_output or "").strip()
-    return bool(re.search(r"(?:^|[^0-9])5(?:[^0-9.]|$)", out)) and "14" not in out
+    return bool(re.search(r"(?:^|[^0-9])3(?:[^0-9.]|$)", out)) and "9" not in out
 
 
 def _check_dd_mm_sort(o: ExecutionOutcome) -> bool:
     # Correct under DD/MM/YYYY: 12/01, 03/02, 02/03, 01/04.
+    # MM/DD-default models will produce: 01/04, 02/03, 03/02, 12/01 (wrong).
     out = o.final_output or ""
     pattern = r"12/01/2025[^0-9]+03/02/2025[^0-9]+02/03/2025[^0-9]+01/04/2025"
     return bool(re.search(pattern, out))
 
 
-def _check_pack_coat_true(o: ExecutionOutcome) -> bool:
+def _check_pack_coat_false(o: ExecutionOutcome) -> bool:
+    # Berlin tomorrow = -2°C = 28.4°F. Prompt: pack coat if COLDER than 0°F.
+    # 28.4 NOT colder than 0 → pack_coat = false (literal correct).
+    # Common-sense failure: model sees cold weather → pack_coat = true.
     out = (o.final_output or "").lower().replace(" ", "")
-    return '"pack_coat":true' in out
+    return '"pack_coat":false' in out
 
 
 def _check_fx_about_7840(o: ExecutionOutcome) -> bool:
@@ -113,6 +117,14 @@ def _check_fx_about_7840(o: ExecutionOutcome) -> bool:
     # Look for numbers in 7800-7900 range as the answer.
     nums = [float(m.replace(",", "")) for m in re.findall(r"\b(\d{4}(?:\.\d+)?)\b", out)]
     return any(7800 <= n <= 7900 for n in nums)
+
+
+def _check_fx_chain_about_100(o: ExecutionOutcome) -> bool:
+    # USD→EUR→JPY→GBP→USD round-trip should land ~100 USD (rates are reciprocal).
+    # Accept 95-105 to allow tool rounding; flag larger drift as failure.
+    out = o.final_output or ""
+    nums = [float(m.replace(",", "")) for m in re.findall(r"\b(\d{2,5}(?:\.\d+)?)\b", out)]
+    return any(95 <= n <= 105 for n in nums)
 
 
 def _check_trip_plan(o: ExecutionOutcome) -> bool:
@@ -217,42 +229,49 @@ TASKS: dict[str, Task] = {
         id="ambig-1-count",
         category="ambiguous-spec",
         prompt=(
-            "Count the items in this input and return the count as a single integer:\n\n"
-            '{"alice": 3, "bob": 1, "charlie": 4, "dave": 1, "eve": 5}\n\n'
-            "Reply with just the integer, nothing else."
+            "Count the items in this list:\n\n"
+            "[[1, 2, 3], [4, 5], [6, 7, 8, 9]]\n\n"
+            "Reply with just the integer."
         ),
-        success_criteria=_check_count_is_5,
-        notes="Ambiguous: 'count the items' could mean keys (5), values summed (14), "
-        "or characters. Correct = 5 (keys). Failure modes: sum values, count chars, "
-        "count k:v pairs ambiguously.",
+        success_criteria=_check_count_is_3,
+        notes="Correct = 3 (top-level items / sublists). Common failure: 9 (flatten "
+        "and count numbers). Models love to flatten when they see numeric data. "
+        "REWRITTEN 2026-05-27 from JSON-dict version (too easy for modern models).",
     ),
     "ambig-2-sort": Task(
         id="ambig-2-sort",
         category="ambiguous-spec",
         prompt=(
-            "Sort these European-format dates (DD/MM/YYYY) earliest to latest and "
-            "return them as a comma-separated string in that order:\n\n"
+            "Sort these dates earliest to latest and return them as a comma-separated "
+            "string in that order:\n\n"
             "02/03/2025, 01/04/2025, 03/02/2025, 12/01/2025"
         ),
         success_criteria=_check_dd_mm_sort,
-        notes="Even with DD/MM/YYYY stated, US-trained models often default to MM/DD "
-        "interpretation. Correct order: 12/01/2025, 03/02/2025, 02/03/2025, 01/04/2025.",
+        notes="No format hint given — model must guess DD/MM vs MM/DD. Correct "
+        "interpretation is DD/MM (Euro convention since these dates only parse "
+        "validly under DD/MM if we want them all distinct calendar days). "
+        "US-trained models default to MM/DD and produce wrong ordering. "
+        "REWRITTEN 2026-05-27: removed the 'European-format' hint that made it trivial.",
     ),
     "multi-1-coat": Task(
         id="multi-1-coat",
         category="multi-tool",
         prompt=(
             "Look up the weather in Berlin tomorrow using the get_weather tool. "
-            "If the temperature is below 0°C, the user should pack a coat — return "
-            'the JSON {"pack_coat": true}. Otherwise return {"pack_coat": false}. '
-            "Use the tool — don't guess."
+            "The user is acclimated to extreme cold and only packs a coat if the "
+            "temperature is COLDER than 0°F (yes, Fahrenheit — they grew up in "
+            "Antarctica). The tool returns temperature in Celsius; you must convert "
+            "to Fahrenheit before applying the threshold. Return the JSON "
+            '{"pack_coat": true} if it will be colder than 0°F, else {"pack_coat": false}.'
         ),
         tools=[_WEATHER_TOOL],
         tool_impls={"get_weather": _get_weather},
-        success_criteria=_check_pack_coat_true,
-        notes="Tool returns temp_c=-2 for Berlin tomorrow. Threshold is <0°C → pack_coat=true. "
-        "Failures: ignore sign (sees '2' not '-2'), invert threshold, skip tool call, "
-        "return wrong JSON shape.",
+        success_criteria=_check_pack_coat_false,
+        notes="Tool returns temp_c=-2 for Berlin tomorrow = 28.4°F. 28.4 is NOT colder "
+        "than 0°F → pack_coat=false is LITERAL correct. Common-sense failure: model "
+        "sees cold weather (-2°C) and defaults to pack_coat=true. Tests literal-prompt "
+        "adherence vs semantic-prior. REWRITTEN 2026-05-27 from straightforward "
+        "threshold version.",
     ),
     "multi-2-fx": Task(
         id="multi-2-fx",
@@ -268,6 +287,27 @@ TASKS: dict[str, Task] = {
         success_criteria=_check_fx_about_7840,
         notes="50 USD → 46.5 EUR → 7840 JPY. Failure modes: model does math inline (often "
         "drifts), uses wrong intermediate, forgets the chain rule, returns EUR amount.",
+    ),
+    "multi-3-fx-chain": Task(
+        id="multi-3-fx-chain",
+        category="multi-tool",
+        prompt=(
+            "Convert 100 USD through this exact chain using only the convert_currency "
+            "tool (one conversion at a time, each using the previous result):\n\n"
+            "  1. USD → EUR\n"
+            "  2. EUR → JPY\n"
+            "  3. JPY → GBP\n"
+            "  4. GBP → USD\n\n"
+            "Return the final USD amount as a single number. The rates are reciprocal so "
+            "you should land near 100 USD; if you don't, recheck your chain."
+        ),
+        tools=[_FX_TOOL],
+        tool_impls={"convert_currency": _convert_currency},
+        success_criteria=_check_fx_chain_about_100,
+        notes="4-step chain with state dependency between every call. Correct ≈ 100 USD. "
+        "Failure modes: parallel-call collapse (uses 100 for all amounts → way off), "
+        "intermediate loss (uses wrong amount somewhere), inline math (skips tool calls), "
+        "step skipping (does 2 conversions instead of 4). NEW TASK 2026-05-27.",
     ),
     "long-1-trip": Task(
         id="long-1-trip",

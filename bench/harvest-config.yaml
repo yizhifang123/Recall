@@ -27,6 +27,9 @@ trials:
   - { shape: single-agent, model: gpt-4o-mini,               task: multi-2-fx,   n_trials: 3 }
   - { shape: single-agent, model: claude-haiku-4-5-20251001, task: multi-2-fx,   n_trials: 2 }
   - { shape: single-agent, model: gpt-5-mini,                task: multi-2-fx,   n_trials: 2 }
+  - { shape: single-agent, model: gpt-4o-mini,               task: multi-3-fx-chain, n_trials: 2 }
+  - { shape: single-agent, model: claude-haiku-4-5-20251001, task: multi-3-fx-chain, n_trials: 2 }
+  - { shape: single-agent, model: gpt-5-mini,                task: multi-3-fx-chain, n_trials: 2 }
 
   # ============================================================
   # MULTI-AGENT shape (LangGraph per D-001-A) — target 7 failures
