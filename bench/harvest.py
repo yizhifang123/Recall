@@ -435,6 +435,12 @@ def main(
                 f"t{trial_id:02d}  {tag}  {cost_str}"
             )
             progress.update(bar, advance=1)
+            # CLI trials hit the Haiku 40k-input-tpm rate limit easily when
+            # run back-to-back. 15s pause keeps the rolling per-minute
+            # input volume under cap. Negligible vs CC's own ~25-90s
+            # runtime per trial.
+            if spec.shape == "cli":
+                time.sleep(15)
 
     # 7. Final summary.
     total = sum(saved_by_shape.values())

@@ -34,21 +34,30 @@ _REPO_SNAPSHOT_FILES = [
     "README.md",
 ]
 
-# CC tools the harvested agent is allowed to use. We intentionally scope to
-# read + workdir-local edits + a narrow Bash allowlist for pytest. Without
-# this, --permission-mode=bypassPermissions would give a confused/adversarial
-# agent unrestricted Bash, which is dangerous even though the cwd is a
-# disposable temp dir (Bash can still read $HOME, hit the network, etc.).
-_ALLOWED_TOOLS = [
-    "Read",
-    "Write",
-    "Edit",
-    "Grep",
-    "Glob",
-    "LS",
-    "Bash(uv run pytest:*)",
-    "Bash(pytest:*)",
-]
+# Security model (see SECURITY.md):
+#
+# Live testing of cli-1-metrics revealed that CC's `--allowedTools` does NOT
+# enforce a restrict-to allowlist in headless `-p` mode without
+# `--permission-mode` set — it's an additional-allow list, not a constraint.
+# A previous version of this file used `--allowedTools` thinking it would
+# scope the agent's tool surface; that was security theater. The CC trial
+# executed `Bash(find ...)` even though only `Bash(pytest:*)` was listed.
+#
+# The actual security model for this executor is:
+#   1. Workdir isolation: each trial runs in a fresh /tmp/recall-cli-<ts>/
+#      deep-copy of the repo snapshot. Mutations there never reach the
+#      real repo and the dir is shutil.rmtree'd on exit.
+#   2. Env scrub (_build_child_env): only PATH/HOME/USER/TERM/LANG/LC_ALL/
+#      TMPDIR/SHELL + CLAUDE_CODE_DISABLE_AUTOUPDATER + ANTHROPIC_API_KEY
+#      cross the process boundary. OPENAI_API_KEY and any other parent
+#      secrets stay in the parent.
+#   3. `--permission-mode bypassPermissions` IS set, with eyes open. CC can
+#      run arbitrary Bash inside the temp workdir cwd. Residual risk: Bash
+#      can read $HOME, hit the network, exhaust disk in TMPDIR. Acceptable
+#      for solo-laptop harvesting; NOT acceptable for multi-tenant or
+#      hostile-prompt scenarios. If you reuse this executor outside Phase 1
+#      trace harvesting, implement a real `--permission-prompt-tool` script
+#      that classifies and denies per-call.
 
 # Env vars the child CC subprocess is allowed to inherit. We do NOT pass
 # OPENAI_API_KEY, AWS_*, or any other parent secrets — only what CC itself
@@ -124,12 +133,11 @@ class ClaudeCliExecutor(ShapeExecutor):
                 "--verbose",
                 "--model",
                 spec.model,
-                "--allowedTools",
-                ",".join(_ALLOWED_TOOLS),
+                "--permission-mode",
+                "bypassPermissions",
             ]
             outcome.extras["claude_cli_cmd"] = cmd
             outcome.extras["claude_cli_workdir"] = str(workdir)
-            outcome.extras["claude_cli_allowed_tools"] = list(_ALLOWED_TOOLS)
 
             events: list[dict] = []
             try:
